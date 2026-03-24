@@ -8,6 +8,8 @@ Do NOT add co-authored-by lines in commits.
 
 Loop is a browser-based product demo video creator. Svelte 5 + Vite + FFmpeg.wasm. Fully client-side.
 
+**Live:** https://loop.iaziz786.com/
+
 **Commands:** `bun run dev`, `bun run build`, `bun run test` (needs dev server on port 5199)
 
 ## Which doc to read
