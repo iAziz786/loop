@@ -72,7 +72,7 @@ export function renderFrame(
         cameraT,
       )
 
-      ctx.globalAlpha = 1 - fadeT
+      ctx.globalAlpha = 1
       ctx.drawImage(currentImg,
         currentViewport.sx, currentViewport.sy, currentViewport.sw, currentViewport.sh,
         0, 0, OUTPUT_WIDTH, OUTPUT_HEIGHT)

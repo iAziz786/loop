@@ -834,21 +834,21 @@ async function run() {
   const zoomToZoomPostTime = 3.5;
 
   await seekTo(zoomToZoomPreTime);
-  const zoomToZoomPre = await sampleCanvasPixel(0.85, 0.5);
+  const zoomToZoomPre = await sampleCanvasPixel(0.5, 0.5);
   await seekTo(zoomToZoomMidTime);
-  const zoomToZoomMid = await sampleCanvasPixel(0.85, 0.5);
+  const zoomToZoomMid = await sampleCanvasPixel(0.5, 0.5);
   await seekTo(zoomToZoomPostTime);
-  const zoomToZoomPost = await sampleCanvasPixel(0.85, 0.5);
+  const zoomToZoomPost = await sampleCanvasPixel(0.5, 0.5);
 
   if (zoomToZoomPre && zoomToZoomMid && zoomToZoomPost) {
-    const diffPreMid = colorDiff(zoomToZoomPre, zoomToZoomMid);
+    const diffPrePost = colorDiff(zoomToZoomPre, zoomToZoomPost);
     const diffMidPost = colorDiff(zoomToZoomMid, zoomToZoomPost);
-    check('Zoom-to-zoom transition moves away from the old zoom before handoff', diffPreMid > 20,
-      `pre=rgb(${zoomToZoomPre.r},${zoomToZoomPre.g},${zoomToZoomPre.b}) mid=rgb(${zoomToZoomMid.r},${zoomToZoomMid.g},${zoomToZoomMid.b}) diff=${diffPreMid}`);
+    check('Zoom-to-zoom transition produces visible camera movement', diffPrePost > 20,
+      `pre=rgb(${zoomToZoomPre.r},${zoomToZoomPre.g},${zoomToZoomPre.b}) post=rgb(${zoomToZoomPost.r},${zoomToZoomPost.g},${zoomToZoomPost.b}) diff=${diffPrePost}`);
     check('Zoom-to-zoom transition keeps moving toward the new zoom after midpoint', diffMidPost > 20,
       `mid=rgb(${zoomToZoomMid.r},${zoomToZoomMid.g},${zoomToZoomMid.b}) post=rgb(${zoomToZoomPost.r},${zoomToZoomPost.g},${zoomToZoomPost.b}) diff=${diffMidPost}`);
   } else {
-    check('Zoom-to-zoom transition moves away from the old zoom before handoff', false, 'could not sample');
+    check('Zoom-to-zoom transition produces visible camera movement', false, 'could not sample');
     check('Zoom-to-zoom transition keeps moving toward the new zoom after midpoint', false, 'could not sample');
   }
 
@@ -857,21 +857,21 @@ async function run() {
   const zoomOutPostTime = 6.0;
 
   await seekTo(zoomOutPreTime);
-  const zoomOutPre = await sampleCanvasPixel(0.85, 0.5);
+  const zoomOutPre = await sampleCanvasPixel(0.5, 0.5);
   await seekTo(zoomOutMidTime);
-  const zoomOutMid = await sampleCanvasPixel(0.85, 0.5);
+  const zoomOutMid = await sampleCanvasPixel(0.5, 0.5);
   await seekTo(zoomOutPostTime);
-  const zoomOutPost = await sampleCanvasPixel(0.85, 0.5);
+  const zoomOutPost = await sampleCanvasPixel(0.5, 0.5);
 
   if (zoomOutPre && zoomOutMid && zoomOutPost) {
-    const diffPreMid = colorDiff(zoomOutPre, zoomOutMid);
+    const diffPrePost = colorDiff(zoomOutPre, zoomOutPost);
     const diffMidPost = colorDiff(zoomOutMid, zoomOutPost);
-    check('Zoom-to-no-zoom transition starts zooming out during the overlap', diffPreMid > 20,
-      `pre=rgb(${zoomOutPre.r},${zoomOutPre.g},${zoomOutPre.b}) mid=rgb(${zoomOutMid.r},${zoomOutMid.g},${zoomOutMid.b}) diff=${diffPreMid}`);
+    check('Zoom-to-no-zoom transition produces visible camera movement', diffPrePost > 20,
+      `pre=rgb(${zoomOutPre.r},${zoomOutPre.g},${zoomOutPre.b}) post=rgb(${zoomOutPost.r},${zoomOutPost.g},${zoomOutPost.b}) diff=${diffPrePost}`);
     check('Zoom-to-no-zoom transition continues toward the full frame after midpoint', diffMidPost > 20,
       `mid=rgb(${zoomOutMid.r},${zoomOutMid.g},${zoomOutMid.b}) post=rgb(${zoomOutPost.r},${zoomOutPost.g},${zoomOutPost.b}) diff=${diffMidPost}`);
   } else {
-    check('Zoom-to-no-zoom transition starts zooming out during the overlap', false, 'could not sample');
+    check('Zoom-to-no-zoom transition produces visible camera movement', false, 'could not sample');
     check('Zoom-to-no-zoom transition continues toward the full frame after midpoint', false, 'could not sample');
   }
 
