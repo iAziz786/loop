@@ -2,7 +2,7 @@
 
 Start here. Read only what you need for the task at hand.
 
-Do NOT add co-authored-by lines in commits.
+Do NOT add co-authored-by lines in commits. Use [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) format (e.g., `fix:`, `feat:`, `docs:`, `chore:`).
 
 ## Quick Context
 
