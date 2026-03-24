@@ -92,7 +92,6 @@
     onpointerdown={handlePointerDown}
     onpointermove={handlePointerMove}
     onpointerup={handlePointerUp}
-    onclick={handleClick}
     role="slider"
     aria-valuemin={0}
     aria-valuemax={totalDuration}
