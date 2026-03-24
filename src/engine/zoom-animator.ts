@@ -8,6 +8,16 @@ export interface Viewport {
   sh: number
 }
 
+export interface CameraState {
+  centerX: number
+  centerY: number
+  scale: number
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value))
+}
+
 function easeInOut(t: number): number {
   return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
 }
@@ -38,6 +48,65 @@ export function canvasToViewport(
   if (vx < -0.1 || vx > 1.1 || vy < -0.1 || vy > 1.1) return null
 
   return { x: vx, y: vy }
+}
+
+export function viewportToCameraState(
+  viewport: Viewport,
+  fullViewport: Viewport,
+): CameraState {
+  return {
+    centerX: ((viewport.sx + viewport.sw / 2) - fullViewport.sx) / fullViewport.sw,
+    centerY: ((viewport.sy + viewport.sh / 2) - fullViewport.sy) / fullViewport.sh,
+    scale: fullViewport.sw / viewport.sw,
+  }
+}
+
+export function cameraStateToViewport(
+  cameraState: CameraState,
+  fullViewport: Viewport,
+): Viewport {
+  const scale = Math.max(1, cameraState.scale)
+  const sw = fullViewport.sw / scale
+  const sh = fullViewport.sh / scale
+  const minCenterX = fullViewport.sx + sw / 2
+  const maxCenterX = fullViewport.sx + fullViewport.sw - sw / 2
+  const minCenterY = fullViewport.sy + sh / 2
+  const maxCenterY = fullViewport.sy + fullViewport.sh - sh / 2
+  const centerX = clamp(fullViewport.sx + cameraState.centerX * fullViewport.sw, minCenterX, maxCenterX)
+  const centerY = clamp(fullViewport.sy + cameraState.centerY * fullViewport.sh, minCenterY, maxCenterY)
+
+  return {
+    sx: centerX - sw / 2,
+    sy: centerY - sh / 2,
+    sw,
+    sh,
+  }
+}
+
+export function interpolateCrossfadeViewports(
+  currentViewport: Viewport,
+  currentFullViewport: Viewport,
+  nextViewport: Viewport,
+  nextFullViewport: Viewport,
+  t: number,
+): {
+  cameraState: CameraState
+  currentViewport: Viewport
+  nextViewport: Viewport
+} {
+  const currentState = viewportToCameraState(currentViewport, currentFullViewport)
+  const nextState = viewportToCameraState(nextViewport, nextFullViewport)
+  const cameraState = {
+    centerX: currentState.centerX + (nextState.centerX - currentState.centerX) * t,
+    centerY: currentState.centerY + (nextState.centerY - currentState.centerY) * t,
+    scale: currentState.scale + (nextState.scale - currentState.scale) * t,
+  }
+
+  return {
+    cameraState,
+    currentViewport: cameraStateToViewport(cameraState, currentFullViewport),
+    nextViewport: cameraStateToViewport(cameraState, nextFullViewport),
+  }
 }
 
 /**

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { projectState, setProjectFromImport, selectAndSeekToScreenshot } from './lib/state.svelte'
+  import { projectState, setProjectFromImport, selectAndSeekToScreenshot, copyScreenshot, pasteScreenshot } from './lib/state.svelte'
   import { downloadConfig, importConfig } from './lib/config-io'
   import TopBar from './components/TopBar.svelte'
   import EmptyState from './components/EmptyState.svelte'
@@ -21,7 +21,15 @@
   function handleKeydown(e: KeyboardEvent) {
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
 
-    if (e.code === 'Space') {
+    const mod = e.metaKey || e.ctrlKey
+
+    if (mod && e.code === 'KeyC') {
+      e.preventDefault()
+      copyScreenshot()
+    } else if (mod && e.code === 'KeyV') {
+      e.preventDefault()
+      pasteScreenshot()
+    } else if (e.code === 'Space') {
       e.preventDefault()
       controller?.toggle()
     } else if (e.code === 'ArrowLeft') {

@@ -90,6 +90,35 @@ export async function addScreenshot(file: File): Promise<void> {
   }
 }
 
+let copiedScreenshotId: string | null = null
+
+export function copyScreenshot(): boolean {
+  if (!selectedScreenshotId) return false
+  copiedScreenshotId = selectedScreenshotId
+  return true
+}
+
+export function pasteScreenshot(): void {
+  if (!copiedScreenshotId) return
+  const source = project.screenshots.find((s) => s.id === copiedScreenshotId)
+  if (!source) return
+
+  const clone: Screenshot = {
+    ...source,
+    id: generateId(),
+    zoom: source.zoom ? { ...source.zoom } : null,
+    clicks: source.clicks.map((c) => ({ ...c })),
+  }
+
+  // Insert right after the currently selected screenshot
+  const selectedIdx = project.screenshots.findIndex((s) => s.id === selectedScreenshotId)
+  const insertIdx = selectedIdx >= 0 ? selectedIdx + 1 : project.screenshots.length
+  const items = [...project.screenshots]
+  items.splice(insertIdx, 0, clone)
+  project.screenshots = items
+  selectedScreenshotId = clone.id
+}
+
 export function removeScreenshot(id: string): void {
   project.screenshots = project.screenshots.filter((s) => s.id !== id)
   if (selectedScreenshotId === id) {
@@ -113,10 +142,13 @@ export function selectAndSeekToScreenshot(id: string): void {
   const index = project.screenshots.findIndex((s) => s.id === id)
   if (index < 0) return
   const starts = computeStartTimes(project.screenshots, project.transitionDuration)
-  // Offset past the bookend fade-in for the first screenshot so it's not black
-  const seekTime = index === 0
-    ? starts[0] + project.bookendFadeDuration
-    : starts[index]
+  const screenshotStart = starts[index]
+  const screenshotEnd = screenshotStart + project.screenshots[index].duration
+  // Seek to when the selected screenshot is fully established on screen.
+  const preferredTime = index === 0
+    ? screenshotStart + project.bookendFadeDuration
+    : screenshotStart + project.transitionDuration
+  const seekTime = Math.min(preferredTime, Math.max(screenshotStart, screenshotEnd - 0.001))
   seekRequest = { time: seekTime, counter: seekRequest.counter + 1 }
 }
 

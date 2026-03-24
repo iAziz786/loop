@@ -60,10 +60,13 @@ export function computeFrameState(
   const totalDuration = starts[starts.length - 1] + screenshots[screenshots.length - 1].duration
   const clampedTime = Math.max(0, Math.min(globalTime, totalDuration))
 
-  // Find which screenshot we're on
+  // Find the outgoing screenshot that is still active at this time.
+  // During overlaps, this stays on the current screenshot until its duration ends,
+  // while nextIndex/crossfadeProgress expose the incoming screenshot.
   let currentIndex = 0
-  for (let i = screenshots.length - 1; i >= 0; i--) {
-    if (clampedTime >= starts[i]) {
+  for (let i = 0; i < screenshots.length; i++) {
+    const end = starts[i] + screenshots[i].duration
+    if (clampedTime < end || i === screenshots.length - 1) {
       currentIndex = i
       break
     }
@@ -77,10 +80,10 @@ export function computeFrameState(
   let crossfadeProgress: number | null = null
 
   if (currentIndex < screenshots.length - 1) {
-    const overlapStart = currentDuration - transitionDuration
-    if (localTime >= overlapStart) {
+    const overlapStart = starts[currentIndex + 1]
+    if (clampedTime >= overlapStart) {
       nextIndex = currentIndex + 1
-      crossfadeProgress = (localTime - overlapStart) / transitionDuration
+      crossfadeProgress = (clampedTime - overlapStart) / transitionDuration
     }
   }
 

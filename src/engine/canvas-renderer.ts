@@ -1,8 +1,16 @@
-import type { Project } from '../lib/types'
+import type { Project, Screenshot } from '../lib/types'
 import { OUTPUT_WIDTH, OUTPUT_HEIGHT } from '../lib/constants'
-import { computeViewport, canvasToViewport } from './zoom-animator'
+import {
+  computeViewport,
+  canvasToViewport,
+  interpolateCrossfadeViewports,
+} from './zoom-animator'
 import { computeCtaState } from './cta-animator'
 import { computeFrameState } from './transition'
+
+function easeInOut(t: number): number {
+  return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
+}
 
 /**
  * Render a single frame of the video preview at the given global time.
@@ -25,12 +33,60 @@ export function renderFrame(
 
   const frame = computeFrameState(globalTime, screenshots, transitionDuration, bookendFadeDuration)
 
-  // Draw current screenshot
-  drawScreenshot(ctx, project, frame.screenshotIndex, frame.localTime, images, frame.alpha)
-
-  // Draw next screenshot during crossfade
   if (frame.nextIndex !== null && frame.crossfadeProgress !== null) {
-    drawScreenshot(ctx, project, frame.nextIndex, 0, images, frame.crossfadeProgress)
+    // --- CROSSFADE with shared camera motion ---
+    // Both screenshots follow the same normalized camera path so the move stays
+    // continuous while the images crossfade.
+
+    const current = screenshots[frame.screenshotIndex]
+    const next = screenshots[frame.nextIndex]
+    const currentImg = images[frame.screenshotIndex]
+    const nextImg = images[frame.nextIndex]
+    const fadeT = frame.crossfadeProgress
+    const cameraT = easeInOut(fadeT)
+
+    if (current && next && currentImg && nextImg) {
+      const currentFullViewport = computeViewport(
+        null, 0, currentImg.naturalWidth, currentImg.naturalHeight,
+      )
+      const nextFullViewport = computeViewport(
+        null, 0, nextImg.naturalWidth, nextImg.naturalHeight,
+      )
+      const currentLiveViewport = computeViewport(
+        current.zoom,
+        frame.localTime,
+        currentImg.naturalWidth,
+        currentImg.naturalHeight,
+      )
+      const nextLiveViewport = computeViewport(
+        next.zoom,
+        fadeT * transitionDuration,
+        nextImg.naturalWidth,
+        nextImg.naturalHeight,
+      )
+      const { currentViewport, nextViewport } = interpolateCrossfadeViewports(
+        currentLiveViewport,
+        currentFullViewport,
+        nextLiveViewport,
+        nextFullViewport,
+        cameraT,
+      )
+
+      ctx.globalAlpha = 1 - fadeT
+      ctx.drawImage(currentImg,
+        currentViewport.sx, currentViewport.sy, currentViewport.sw, currentViewport.sh,
+        0, 0, OUTPUT_WIDTH, OUTPUT_HEIGHT)
+
+      ctx.globalAlpha = fadeT
+      ctx.drawImage(nextImg,
+        nextViewport.sx, nextViewport.sy, nextViewport.sw, nextViewport.sh,
+        0, 0, OUTPUT_WIDTH, OUTPUT_HEIGHT)
+
+      ctx.globalAlpha = 1
+    }
+  } else {
+    // --- Normal rendering (no crossfade) ---
+    drawScreenshot(ctx, project, frame.screenshotIndex, frame.localTime, images, frame.alpha)
   }
 
   // Bookend fade overlay
@@ -52,10 +108,10 @@ function drawScreenshot(
   const img = images[index]
   if (!screenshot || !img) return
 
-  // Full viewport (unzoomed center-crop) — this is what edit mode shows
+  // Full viewport (unzoomed center-crop)
   const fullViewport = computeViewport(null, 0, img.naturalWidth, img.naturalHeight)
 
-  // Current viewport (with zoom animation)
+  // Current viewport (with zoom animation based on localTime)
   const currentViewport = computeViewport(
     screenshot.zoom,
     localTime,

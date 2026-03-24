@@ -300,6 +300,76 @@ async function run() {
     return (await page.locator('aside').textContent()) ?? '';
   }
 
+  async function sampleCanvasPixel(nx: number, ny: number) {
+    return await page.evaluate(({ nx, ny }) => {
+      const canvas = document.querySelector('canvas') as HTMLCanvasElement;
+      if (!canvas) return null;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
+      const x = Math.max(0, Math.min(canvas.width - 1, Math.floor(canvas.width * nx)));
+      const y = Math.max(0, Math.min(canvas.height - 1, Math.floor(canvas.height * ny)));
+      const d = ctx.getImageData(x, y, 1, 1).data;
+      return { r: d[0], g: d[1], b: d[2] };
+    }, { nx, ny });
+  }
+
+  function colorDiff(
+    a: { r: number; g: number; b: number },
+    b: { r: number; g: number; b: number },
+  ): number {
+    return Math.abs(a.r - b.r) + Math.abs(a.g - b.g) + Math.abs(a.b - b.b);
+  }
+
+  async function setZoomLevel(value: number) {
+    await page.evaluate((nextValue) => {
+      const aside = document.querySelector('aside');
+      if (!aside) return;
+      const ranges = aside.querySelectorAll('input[type="range"]');
+      const zoomRange = ranges[1] as HTMLInputElement | undefined;
+      if (!zoomRange) return;
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+      setter?.call(zoomRange, String(nextValue));
+      zoomRange.dispatchEvent(new Event('input', { bubbles: true }));
+    }, value);
+    await page.waitForTimeout(150);
+  }
+
+  async function ensureZoomEnabled(enabled: boolean) {
+    const enabledBtn = page.locator('aside button:has-text("Enabled")').first();
+    const disabledBtn = page.locator('aside button:has-text("Disabled")').first();
+
+    if (enabled) {
+      if (await disabledBtn.isVisible()) {
+        await disabledBtn.click();
+        await page.waitForTimeout(150);
+      }
+      return;
+    }
+
+    if (await enabledBtn.isVisible()) {
+      await enabledBtn.click();
+      await page.waitForTimeout(150);
+    }
+  }
+
+  async function dragZoomCenter(nx: number, ny: number) {
+    const box = await canvasEl.boundingBox();
+    if (!box) return false;
+
+    const start = { x: box.x + box.width * 0.5, y: box.y + box.height * 0.5 };
+    const target = { x: box.x + box.width * nx, y: box.y + box.height * ny };
+
+    await page.locator('button:has-text("Zoom Center")').click();
+    await page.waitForTimeout(100);
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    await page.mouse.move(target.x, target.y, { steps: 10 });
+    await page.waitForTimeout(100);
+    await page.mouse.up();
+    await page.waitForTimeout(150);
+    return true;
+  }
+
   // 12d: Test seek works — seek to a known time and verify time display updates
   const timeBefore = await getCurrentTimeText();
   await seekTo(4);
@@ -639,8 +709,174 @@ async function run() {
   check('ArrowRight seeks to next (green) screenshot', rightGoesGreen,
     colorAfterRight ? `avg rgb(${colorAfterRight.r}, ${colorAfterRight.g}, ${colorAfterRight.b})` : 'no color');
 
-  // === Test 17: FFmpeg Video Rendering ===
-  console.log('\n17. FFmpeg Video Rendering');
+  // === Test 17: Zoom Transitions During Crossfade ===
+  console.log('\n17. Zoom Transitions During Crossfade');
+
+  // Screen1 (blue) has zoom enabled. Screen3 (green) has no zoom.
+  // During crossfade between them, the viewport should smoothly zoom out.
+  // 2 screenshots at 3s each, crossfade 0.5s → total 5.5s.
+  // Screen1 = 0-3s. Crossfade = 2.5s-3.0s. Screen3 = 2.5s-5.5s.
+
+  const preCrossfadeTime = 2.0;  // fully zoomed, before crossfade
+  const midCrossfadeTime = 2.6;  // early in crossfade (crossfade is 2.5-3.0s)
+  const postCrossfadeTime = 3.5; // after crossfade, on screen3
+
+  await seekTo(preCrossfadeTime);
+  await page.waitForTimeout(200);
+  const preXfadeColor = await page.evaluate(() => {
+    const c = document.querySelector('canvas') as HTMLCanvasElement;
+    const ctx = c?.getContext('2d');
+    if (!ctx) return null;
+    // Sample far-right edge — if zoomed in, this pixel is different from unzoomed
+    const d = ctx.getImageData(c.width - 50, c.height / 2, 1, 1).data;
+    return { r: d[0], g: d[1], b: d[2] };
+  });
+
+  await seekTo(midCrossfadeTime);
+  await page.waitForTimeout(200);
+  const midXfadeColor = await page.evaluate(() => {
+    const c = document.querySelector('canvas') as HTMLCanvasElement;
+    const ctx = c?.getContext('2d');
+    if (!ctx) return null;
+    const d = ctx.getImageData(c.width - 50, c.height / 2, 1, 1).data;
+    return { r: d[0], g: d[1], b: d[2] };
+  });
+
+  await seekTo(postCrossfadeTime);
+  await page.waitForTimeout(200);
+  const postXfadeColor = await page.evaluate(() => {
+    const c = document.querySelector('canvas') as HTMLCanvasElement;
+    const ctx = c?.getContext('2d');
+    if (!ctx) return null;
+    const d = ctx.getImageData(c.width - 50, c.height / 2, 1, 1).data;
+    return { r: d[0], g: d[1], b: d[2] };
+  });
+
+  // The midpoint should differ from both the pre and post states
+  // (it's a blend, not an abrupt switch)
+  if (preXfadeColor && midXfadeColor && postXfadeColor) {
+    const diffPreMid = Math.abs(preXfadeColor.r - midXfadeColor.r)
+      + Math.abs(preXfadeColor.g - midXfadeColor.g)
+      + Math.abs(preXfadeColor.b - midXfadeColor.b);
+    const diffMidPost = Math.abs(midXfadeColor.r - postXfadeColor.r)
+      + Math.abs(midXfadeColor.g - postXfadeColor.g)
+      + Math.abs(midXfadeColor.b - postXfadeColor.b);
+
+    check('Crossfade midpoint differs from pre-crossfade (smooth transition)',
+      diffPreMid > 10,
+      `pre=rgb(${preXfadeColor.r},${preXfadeColor.g},${preXfadeColor.b}) mid=rgb(${midXfadeColor.r},${midXfadeColor.g},${midXfadeColor.b}) diff=${diffPreMid}`);
+    check('Crossfade midpoint differs from post-crossfade (not instant jump)',
+      diffMidPost > 10,
+      `mid=rgb(${midXfadeColor.r},${midXfadeColor.g},${midXfadeColor.b}) post=rgb(${postXfadeColor.r},${postXfadeColor.g},${postXfadeColor.b}) diff=${diffMidPost}`);
+  } else {
+    check('Crossfade midpoint differs from pre-crossfade', false, 'could not sample');
+    check('Crossfade midpoint differs from post-crossfade', false, 'could not sample');
+  }
+
+  // === Test 18: Copy/Paste Screenshots ===
+  console.log('\n18. Copy/Paste Screenshots');
+
+  // Select first thumbnail, Cmd+C, Cmd+V
+  await firstThumb.click();
+  await page.waitForTimeout(300);
+  const countBeforePaste = await page.locator('img[alt*="screen"]').count();
+
+  await page.click('body');
+  await page.keyboard.press('Meta+c');
+  await page.waitForTimeout(100);
+  await page.keyboard.press('Meta+v');
+  await page.waitForTimeout(500);
+
+  const countAfterPaste = await page.locator('img[alt*="screen"]').count();
+  check('Paste adds a duplicate screenshot', countAfterPaste === countBeforePaste + 1,
+    `before: ${countBeforePaste}, after: ${countAfterPaste}`);
+
+  // The pasted screenshot should have the same zoom setting
+  const pastedSettings = (await page.locator('aside').textContent()) ?? '';
+  check('Pasted screenshot preserves zoom', pastedSettings.includes('Enabled'));
+
+  // Paste again so we can exercise two consecutive transition variants on the same source image.
+  await page.click('body');
+  await page.keyboard.press('Meta+v');
+  await page.waitForTimeout(500);
+
+  const countAfterSecondPaste = await page.locator('img[alt*="screen"]').count();
+  check('Second paste adds another duplicate screenshot', countAfterSecondPaste === countBeforePaste + 2,
+    `before: ${countBeforePaste}, after second paste: ${countAfterSecondPaste}`);
+
+  // Timeline order is now: original blue zoom, duplicate blue zoom, duplicate blue zoom, green.
+  // Reconfigure the two duplicates to cover zoom->different-zoom and zoom->no-zoom transitions.
+  const secondThumbAfterPaste = page.locator('[role="button"]').nth(1);
+  const thirdThumbAfterPaste = page.locator('[role="button"]').nth(2);
+
+  await secondThumbAfterPaste.click();
+  await page.waitForTimeout(300);
+  await editBtn.click();
+  await page.waitForTimeout(200);
+  await ensureZoomEnabled(true);
+  await setZoomLevel(3);
+  const movedSecondZoom = await dragZoomCenter(0.2, 0.75);
+  check('Second duplicated screenshot can be repositioned to a new zoom target', movedSecondZoom);
+
+  await thirdThumbAfterPaste.click();
+  await page.waitForTimeout(300);
+  await editBtn.click();
+  await page.waitForTimeout(200);
+  await ensureZoomEnabled(false);
+  const thirdSettings = (await page.locator('aside').textContent()) ?? '';
+  check('Third duplicated screenshot can be configured without zoom', thirdSettings.includes('Disabled'));
+
+  await previewBtn.click();
+  await page.waitForTimeout(200);
+
+  const zoomToZoomPreTime = 2.0;
+  const zoomToZoomMidTime = 2.75;
+  const zoomToZoomPostTime = 3.5;
+
+  await seekTo(zoomToZoomPreTime);
+  const zoomToZoomPre = await sampleCanvasPixel(0.85, 0.5);
+  await seekTo(zoomToZoomMidTime);
+  const zoomToZoomMid = await sampleCanvasPixel(0.85, 0.5);
+  await seekTo(zoomToZoomPostTime);
+  const zoomToZoomPost = await sampleCanvasPixel(0.85, 0.5);
+
+  if (zoomToZoomPre && zoomToZoomMid && zoomToZoomPost) {
+    const diffPreMid = colorDiff(zoomToZoomPre, zoomToZoomMid);
+    const diffMidPost = colorDiff(zoomToZoomMid, zoomToZoomPost);
+    check('Zoom-to-zoom transition moves away from the old zoom before handoff', diffPreMid > 20,
+      `pre=rgb(${zoomToZoomPre.r},${zoomToZoomPre.g},${zoomToZoomPre.b}) mid=rgb(${zoomToZoomMid.r},${zoomToZoomMid.g},${zoomToZoomMid.b}) diff=${diffPreMid}`);
+    check('Zoom-to-zoom transition keeps moving toward the new zoom after midpoint', diffMidPost > 20,
+      `mid=rgb(${zoomToZoomMid.r},${zoomToZoomMid.g},${zoomToZoomMid.b}) post=rgb(${zoomToZoomPost.r},${zoomToZoomPost.g},${zoomToZoomPost.b}) diff=${diffMidPost}`);
+  } else {
+    check('Zoom-to-zoom transition moves away from the old zoom before handoff', false, 'could not sample');
+    check('Zoom-to-zoom transition keeps moving toward the new zoom after midpoint', false, 'could not sample');
+  }
+
+  const zoomOutPreTime = 4.5;
+  const zoomOutMidTime = 5.25;
+  const zoomOutPostTime = 6.0;
+
+  await seekTo(zoomOutPreTime);
+  const zoomOutPre = await sampleCanvasPixel(0.85, 0.5);
+  await seekTo(zoomOutMidTime);
+  const zoomOutMid = await sampleCanvasPixel(0.85, 0.5);
+  await seekTo(zoomOutPostTime);
+  const zoomOutPost = await sampleCanvasPixel(0.85, 0.5);
+
+  if (zoomOutPre && zoomOutMid && zoomOutPost) {
+    const diffPreMid = colorDiff(zoomOutPre, zoomOutMid);
+    const diffMidPost = colorDiff(zoomOutMid, zoomOutPost);
+    check('Zoom-to-no-zoom transition starts zooming out during the overlap', diffPreMid > 20,
+      `pre=rgb(${zoomOutPre.r},${zoomOutPre.g},${zoomOutPre.b}) mid=rgb(${zoomOutMid.r},${zoomOutMid.g},${zoomOutMid.b}) diff=${diffPreMid}`);
+    check('Zoom-to-no-zoom transition continues toward the full frame after midpoint', diffMidPost > 20,
+      `mid=rgb(${zoomOutMid.r},${zoomOutMid.g},${zoomOutMid.b}) post=rgb(${zoomOutPost.r},${zoomOutPost.g},${zoomOutPost.b}) diff=${diffMidPost}`);
+  } else {
+    check('Zoom-to-no-zoom transition starts zooming out during the overlap', false, 'could not sample');
+    check('Zoom-to-no-zoom transition continues toward the full frame after midpoint', false, 'could not sample');
+  }
+
+  // === Test 19: FFmpeg Video Rendering ===
+  console.log('\n19. FFmpeg Video Rendering');
 
   // To keep render fast, reduce screenshot count and durations first
   // Delete all but 1 screenshot, set duration to 1s (minimum)

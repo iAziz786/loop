@@ -23,7 +23,7 @@ Run tests in another:
 bun run test
 ```
 
-### What's Tested (78 checks)
+### What's Tested
 
 | Area | Checks |
 |------|--------|
