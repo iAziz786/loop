@@ -127,7 +127,7 @@ async function run() {
   const settingsContent = (await page.locator('aside').textContent()) ?? '';
   check('Music section present', settingsContent.includes('Background Music'));
   check('Volume control present', settingsContent.includes('Volume'));
-  check('Track options present', settingsContent.includes('Chill Jazz') || settingsContent.includes('Lo-fi'));
+  check('Track options present', settingsContent.includes('Sleepy Cat') || settingsContent.includes('Smooth Jazz'));
 
   // === Test 8: Playback Controls ===
   console.log('\n8. Playback Controls');

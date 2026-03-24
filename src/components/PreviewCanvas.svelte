@@ -8,7 +8,7 @@
   import { renderEditFrame } from '../engine/edit-renderer'
 
   let canvas: HTMLCanvasElement
-  let controller: PlaybackController | null = null
+  let controller = $state<PlaybackController | null>(null)
   let images: HTMLImageElement[] = $state([])
   let editMode = $state(false)
   let editTool: 'zoom' | 'cta' = $state('cta')
@@ -57,6 +57,11 @@
         zoom: s.zoom,
         clicks: s.clicks,
       }))
+      // Track music config changes
+      const _music = projectState.project.music.source
+      const _track = projectState.project.music.trackIndex
+      const _vol = projectState.project.music.volume
+      const _custom = projectState.project.music.customFile
       controller.updateProject(projectState.project, images)
     }
   })

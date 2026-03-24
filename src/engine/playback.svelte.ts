@@ -12,6 +12,8 @@ export class PlaybackController {
   private pausedAt: number = 0
   private audio: HTMLAudioElement | null = null
   private audioUrl: string | null = null
+  private lastMusicSource: string = ''
+  private lastTrackIndex: number = -1
 
   currentTime = $state(0)
   isPlaying = $state(false)
@@ -46,6 +48,13 @@ export class PlaybackController {
   private loadAudio(): void {
     const { music } = this.project
 
+    // Check if music config actually changed
+    const musicChanged = music.source !== this.lastMusicSource
+      || music.trackIndex !== this.lastTrackIndex
+      || (music.source === 'custom' && music.customFile !== null)
+    this.lastMusicSource = music.source
+    this.lastTrackIndex = music.trackIndex
+
     let src: string | null = null
     if (music.source === 'custom' && music.customFile) {
       // Revoke previous blob URL
@@ -69,8 +78,7 @@ export class PlaybackController {
       this.audio.loop = true // Loop for videos longer than the track
     }
 
-    // Only change src if different
-    if (this.audio.src !== src && !this.audio.src.endsWith(src)) {
+    if (musicChanged) {
       this.audio.src = src
       this.audio.load()
     }

@@ -18,6 +18,6 @@ export const CROP_LOSS_WARNING_THRESHOLD = 0.5
 export const DEFAULT_VOLUME = 0.7
 
 export const BUNDLED_TRACKS = [
-  { name: 'Chill Jazz', path: '/music/track-01.mp3' },
-  { name: 'Lo-fi Beats', path: '/music/track-02.mp3' },
+  { name: 'Sleepy Cat', path: '/music/track-01.mp3' },
+  { name: 'Smooth Jazz', path: '/music/track-02.mp3' },
 ]
