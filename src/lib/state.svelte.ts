@@ -9,6 +9,7 @@ import { computeTotalDuration, validateAndAdjust } from './timing'
 import { computeStartTimes } from '../engine/transition'
 import { downscaleIfNeeded, createThumbnail, shouldWarnCropLoss } from './image'
 import { computeChecksum } from './checksum'
+import { saveProject, loadProject, clearPersistedProject } from './persistence'
 
 function createEmptyProject(): Project {
   return {
@@ -88,6 +89,8 @@ export async function addScreenshot(file: File): Promise<void> {
   if (project.screenshots.length === 1) {
     selectedScreenshotId = screenshot.id
   }
+
+  scheduleSave()
 }
 
 let copiedScreenshotId: string | null = null
@@ -117,6 +120,7 @@ export function pasteScreenshot(): void {
   items.splice(insertIdx, 0, clone)
   project.screenshots = items
   selectedScreenshotId = clone.id
+  scheduleSave()
 }
 
 export function removeScreenshot(id: string): void {
@@ -124,6 +128,7 @@ export function removeScreenshot(id: string): void {
   if (selectedScreenshotId === id) {
     selectedScreenshotId = project.screenshots[0]?.id ?? null
   }
+  scheduleSave()
 }
 
 export function reorderScreenshots(fromIndex: number, toIndex: number): void {
@@ -131,10 +136,12 @@ export function reorderScreenshots(fromIndex: number, toIndex: number): void {
   const [moved] = items.splice(fromIndex, 1)
   items.splice(toIndex, 0, moved)
   project.screenshots = items
+  scheduleSave()
 }
 
 export function selectScreenshot(id: string | null): void {
   selectedScreenshotId = id
+  scheduleSave()
 }
 
 export function selectAndSeekToScreenshot(id: string): void {
@@ -158,6 +165,7 @@ export function updateScreenshot(id: string, partial: Partial<Screenshot>): void
     const updated = { ...s, ...partial }
     return validateAndAdjust(updated)
   })
+  scheduleSave()
 }
 
 export function setZoom(id: string, zoom: ZoomConfig | null): void {
@@ -180,6 +188,7 @@ export function removeClick(id: string, clickIndex: number): void {
 
 export function setMusic(partial: Partial<MusicConfig>): void {
   project.music = { ...project.music, ...partial }
+  scheduleSave()
 }
 
 export function resetProject(): void {
@@ -187,9 +196,67 @@ export function resetProject(): void {
   selectedScreenshotId = null
 }
 
+export async function clearProject(): Promise<void> {
+  resetProject()
+  await clearPersistedProject()
+}
+
+export async function restoreProject(): Promise<boolean> {
+  restoringState = true
+  try {
+    const saved = await loadProject()
+    if (!saved) return false
+    project = saved.project
+    selectedScreenshotId = saved.selectedScreenshotId
+    return true
+  } finally {
+    restoringState = false
+  }
+}
+
+let saveTimeout: ReturnType<typeof setTimeout> | null = null
+let restoringState = false
+
+function getSnapshotForSave(): { project: Project; selectedId: string | null } {
+  // Use $state.snapshot to unwrap Svelte 5 proxies before passing to IndexedDB
+  const snap = $state.snapshot(project) as Project
+  // $state.snapshot deep-clones plain data but File/Blob become plain objects.
+  // Re-attach the original File references from the proxy.
+  for (let i = 0; i < snap.screenshots.length; i++) {
+    snap.screenshots[i].file = project.screenshots[i].file
+  }
+  if (project.music.customFile) {
+    snap.music.customFile = project.music.customFile
+  }
+  return { project: snap, selectedId: selectedScreenshotId }
+}
+
+function scheduleSave(): void {
+  if (restoringState) return
+  if (saveTimeout) clearTimeout(saveTimeout)
+  saveTimeout = setTimeout(() => {
+    const { project: snap, selectedId } = getSnapshotForSave()
+    saveProject(snap, selectedId).catch(() => {})
+  }, 300)
+}
+
+function flushSave(): void {
+  if (saveTimeout) {
+    clearTimeout(saveTimeout)
+    saveTimeout = null
+  }
+  const { project: snap, selectedId } = getSnapshotForSave()
+  saveProject(snap, selectedId).catch(() => {})
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', () => flushSave())
+}
+
 export function setProjectFromImport(imported: Project): void {
   project = imported
   selectedScreenshotId = imported.screenshots[0]?.id ?? null
+  scheduleSave()
 }
 
 export function getCropWarning(screenshot: Screenshot): boolean {

@@ -1037,6 +1037,63 @@ async function run() {
     }
   }
 
+  // === Test 20: Persistence Across Reload ===
+  console.log('\n20. Persistence Across Reload');
+  {
+    // Navigate fresh to clear any existing state, upload screenshots
+    await page.goto(BASE_URL);
+    await page.waitForTimeout(500);
+
+    // Upload screenshots
+    const persistInput = page.locator('input[type="file"][accept*="image"]').first();
+    await persistInput.setInputFiles([
+      path.join(ASSETS, 'screen1.png'),
+      path.join(ASSETS, 'screen2.png'),
+    ]);
+    await page.waitForTimeout(1000);
+
+    // Verify screenshots are showing
+    const thumbsBefore = await page.locator('img[alt*="screen"]').count();
+    check('Screenshots uploaded before reload', thumbsBefore >= 2, `count: ${thumbsBefore}`);
+
+    // Get header text (should show screenshot count)
+    const headerBefore = await page.textContent('header');
+    check('Header shows count before reload', headerBefore?.includes(`${thumbsBefore}`) ?? false);
+
+    // Wait for save to complete (debounce is 300ms)
+    await page.waitForTimeout(600);
+
+    // Reload the page
+    await page.reload({ waitUntil: 'load' });
+    await page.waitForTimeout(1000);
+
+    // Check that screenshots are restored
+    const thumbsAfter = await page.locator('img[alt*="screen"]').count();
+    check('Screenshots persist after reload', thumbsAfter >= 2, `before: ${thumbsBefore}, after: ${thumbsAfter}`);
+
+    const headerAfter = await page.textContent('header');
+    check('Header reflects restored count', headerAfter?.includes(`${thumbsAfter}`) ?? false);
+  }
+
+  // === Test 21: Clear All ===
+  console.log('\n21. Clear All');
+  {
+    // Set up dialog handler to accept the confirm dialog
+    page.on('dialog', async (dialog) => {
+      await dialog.accept();
+    });
+
+    const clearBtn = page.locator('button:has-text("Clear All")');
+    if (await clearBtn.isVisible()) {
+      await clearBtn.click();
+      await page.waitForTimeout(500);
+      const dropZone = page.locator('text=Drop screenshots here');
+      check('Clear All resets to empty state', await dropZone.isVisible());
+    } else {
+      check('Clear All button visible', false, 'button not found');
+    }
+  }
+
   // Take final screenshot
   await page.screenshot({ path: 'test-assets/final-state.png', fullPage: true });
   console.log('\n  Screenshot saved: test-assets/final-state.png');

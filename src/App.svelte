@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { projectState, setProjectFromImport, selectAndSeekToScreenshot, copyScreenshot, pasteScreenshot } from './lib/state.svelte'
+  import { projectState, setProjectFromImport, selectAndSeekToScreenshot, copyScreenshot, pasteScreenshot, clearProject, restoreProject } from './lib/state.svelte'
+  import { onMount } from 'svelte'
   import { downloadConfig, importConfig } from './lib/config-io'
   import TopBar from './components/TopBar.svelte'
   import EmptyState from './components/EmptyState.svelte'
@@ -14,6 +15,10 @@
   let configInput: HTMLInputElement
   let imageInput: HTMLInputElement
   let pendingConfigJson = $state<string | null>(null)
+
+  onMount(() => {
+    restoreProject()
+  })
 
   const hasScreenshots = $derived(projectState.screenshotCount > 0)
   const controller = $derived(previewCanvas?.getController() ?? null)
@@ -51,6 +56,11 @@
 
   function handleExport() {
     downloadConfig(projectState.project)
+  }
+
+  function handleClear() {
+    if (!confirm('Clear all screenshots and settings? This cannot be undone.')) return
+    clearProject()
   }
 
   function handleImportConfig(e: Event) {
@@ -116,6 +126,12 @@
           onclick={() => configInput.click()}
         >
           Import Config
+        </button>
+        <button
+          class="rounded bg-red-900/50 px-3 py-1.5 text-sm text-red-400 hover:bg-red-800/50 hover:text-red-200"
+          onclick={handleClear}
+        >
+          Clear All
         </button>
       </div>
       <button
