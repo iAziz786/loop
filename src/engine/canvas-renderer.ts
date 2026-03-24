@@ -158,19 +158,43 @@ function drawScreenshot(
 function drawCursor(ctx: CanvasRenderingContext2D, nx: number, ny: number): void {
   const x = nx * OUTPUT_WIDTH
   const y = ny * OUTPUT_HEIGHT
-  const size = 24
+  const s = 36 // cursor size — bold and visible
 
   ctx.save()
-  ctx.fillStyle = '#fff'
-  ctx.strokeStyle = '#000'
-  ctx.lineWidth = 2
+
+  // Drop shadow
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.5)'
+  ctx.shadowBlur = 8
+  ctx.shadowOffsetX = 2
+  ctx.shadowOffsetY = 3
+
+  // macOS-style pointer shape
   ctx.beginPath()
-  ctx.moveTo(x, y)
-  ctx.lineTo(x + size * 0.4, y + size * 0.9)
-  ctx.lineTo(x + size * 0.15, y + size * 0.65)
+  ctx.moveTo(x, y)                           // tip
+  ctx.lineTo(x, y + s * 0.82)               // down the left edge
+  ctx.lineTo(x + s * 0.2, y + s * 0.65)     // notch inward
+  ctx.lineTo(x + s * 0.38, y + s * 1.0)     // tail bottom-right
+  ctx.lineTo(x + s * 0.52, y + s * 0.92)    // tail top-right
+  ctx.lineTo(x + s * 0.32, y + s * 0.58)    // notch top
+  ctx.lineTo(x + s * 0.58, y + s * 0.58)    // right wing
   ctx.closePath()
+
+  // White fill
+  ctx.fillStyle = '#ffffff'
   ctx.fill()
+
+  // Reset shadow before stroke
+  ctx.shadowColor = 'transparent'
+  ctx.shadowBlur = 0
+  ctx.shadowOffsetX = 0
+  ctx.shadowOffsetY = 0
+
+  // Black border
+  ctx.strokeStyle = '#1a1a1a'
+  ctx.lineWidth = 2.5
+  ctx.lineJoin = 'round'
   ctx.stroke()
+
   ctx.restore()
 }
 
@@ -182,29 +206,47 @@ function drawRipple(
 ): void {
   const x = nx * OUTPUT_WIDTH
   const y = ny * OUTPUT_HEIGHT
-  const maxRadius = 40
+  const maxRadius = 55
   const radius = maxRadius * progress
-  const opacity = 1 - progress
+  const opacity = Math.max(0, 1 - progress)
 
-  // Outer ring
+  ctx.save()
+
+  // Filled pulse (fading out)
+  if (progress < 0.6) {
+    ctx.beginPath()
+    ctx.arc(x, y, radius, 0, Math.PI * 2)
+    ctx.fillStyle = `rgba(59, 130, 246, ${opacity * 0.15})`
+    ctx.fill()
+  }
+
+  // Outer ring — bold
   ctx.beginPath()
   ctx.arc(x, y, radius, 0, Math.PI * 2)
-  ctx.strokeStyle = `rgba(59, 130, 246, ${opacity * 0.8})`
-  ctx.lineWidth = 3
+  ctx.strokeStyle = `rgba(59, 130, 246, ${opacity * 0.9})`
+  ctx.lineWidth = 4
   ctx.stroke()
 
-  // Inner ring
+  // Middle ring
   ctx.beginPath()
   ctx.arc(x, y, radius * 0.6, 0, Math.PI * 2)
-  ctx.strokeStyle = `rgba(59, 130, 246, ${opacity * 0.4})`
-  ctx.lineWidth = 2
+  ctx.strokeStyle = `rgba(59, 130, 246, ${opacity * 0.5})`
+  ctx.lineWidth = 2.5
   ctx.stroke()
 
   // Center dot
   if (progress < 0.5) {
+    const dotOpacity = (1 - progress * 2) * 0.9
     ctx.beginPath()
-    ctx.arc(x, y, 4, 0, Math.PI * 2)
-    ctx.fillStyle = `rgba(59, 130, 246, ${(1 - progress * 2) * 0.8})`
+    ctx.arc(x, y, 6, 0, Math.PI * 2)
+    ctx.fillStyle = `rgba(59, 130, 246, ${dotOpacity})`
+    ctx.fill()
+    // White inner dot
+    ctx.beginPath()
+    ctx.arc(x, y, 3, 0, Math.PI * 2)
+    ctx.fillStyle = `rgba(255, 255, 255, ${dotOpacity})`
     ctx.fill()
   }
+
+  ctx.restore()
 }
